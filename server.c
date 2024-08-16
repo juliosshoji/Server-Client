@@ -38,13 +38,22 @@ int main(int argc, char* argv[]){
 
     //open html file
     FILE* htmlresponse = fopen("response.html", "r");
-    
+    if(htmlresponse == NULL){
+        exit(1);
+    }
     //read html file into buffer
     while(fgets(readfile, 128, htmlresponse) != NULL){
         strcat(buffersend, readfile);
     };
     
     fclose(htmlresponse);
+
+    FILE* secondaryresponse = fopen("secondary.html", "r");
+    if(secondaryresponse == NULL){
+        exit(1);
+    }
+
+
     //creating server socket
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -91,7 +100,7 @@ int main(int argc, char* argv[]){
             exit(1);
         }
 
-        printf("Data received:\n%s\n", bufferrecv);
+        printf("%s", bufferrecv);
 
         close(client_socket);
         shutdown(client_socket, SHUT_RDWR);
