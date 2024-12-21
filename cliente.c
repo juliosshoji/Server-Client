@@ -5,10 +5,123 @@
 #include <netinet/in.h>
 #include <errno.h>
 #include <string.h>
+#include <pthread.h>
+
+#define MESSAGE_SIZE 4096
+
+const char* breakupcode = "break connection please\n";
+
+int breakupsignal = 1;
+
+int openSocket();
+void send_data(void* data, size_t content_size, int network_socket);
+void* treat_data(int network_socket);
+char* getMessage();
+char* getResponse();
+void printChat();
+
+void* receiving(void* network_socket);
+void* sending(void* network_socket);
 
 //TCP -> create a socket, define addr to connect, try to connect, if sucessful trasnmit data
 int main(int argc, char* argv[]){
+    int socket = openSocket();
     
+    pthread_t receiving_thread;
+    pthread_t sending_thread;
+
+    pthread_create(&receiving_thread, NULL, receiving, (void*) &socket);
+    pthread_create(&sending_thread, NULL, sending, (void*) &socket);
+
+    pthread_join(receiving_thread, NULL);
+    pthread_join(sending_thread, NULL);
+
+    close(socket);
+
+    printf("Conexão terminada, fechando!\n");
+
+
+    return 0;
+}
+
+void* receiving(void* network_socket){
+    int* socket = (int*) network_socket;
+    char* response;
+    while(breakupsignal){
+        response = treat_data(*socket);
+        if(strncmp(response, breakupcode, 25) == 0){
+            breakupsignal = 0;
+            break;
+        }
+        printf("Servidor: %s", response);
+    }
+    return NULL;
+}
+
+void* sending(void* network_socket){
+    int* socket = (int*) network_socket;
+    char* message;
+    while(breakupsignal){
+        message = getMessage();
+        send_data(message, strlen(message), *socket);
+        if(strncmp(message, breakupcode, 25) == 0){
+            breakupsignal = 0;
+        }
+    }
+    return NULL;
+}
+
+void send_data(void* data, size_t content_size, int network_socket){
+    
+
+    if(send(network_socket, &content_size, sizeof(size_t), 0) == -1){
+        printf("Error sending data in send_data 1!\n");
+        exit(1);
+    }
+
+    if(send(network_socket, data, content_size, 0) == -1){
+        printf("Error sending  data in send_data 2!\n");
+        exit(1);
+    }
+
+}
+
+void* treat_data(int network_socket){
+    
+    size_t content_size;
+
+    //receiving data from remote socket
+    if(recv(network_socket, &content_size, sizeof(size_t), 0) == -1){
+        printf("Error receiving data in treat_data 1!\n");
+        exit(1);
+    }
+    void* content = (void*)malloc(content_size);
+    if(content == NULL){
+        printf("Error alocating memory for content\n");
+        exit(1);
+    }
+
+    if(recv(network_socket, content, content_size*sizeof(char), 0) == -1){
+        printf("Error receiving data in treat_data 2!\n");
+        exit(1);
+    }
+
+    return content;
+}
+
+char* getMessage(){
+    
+    char* message = (char*)malloc(sizeof(char)*MESSAGE_SIZE);
+    if(message == NULL){
+        printf("Error alocating memory\n");
+        exit(1);
+    }
+    fgets(message, MESSAGE_SIZE, stdin);
+
+    return message;
+}
+
+int openSocket(){
     //create a socket (ipv4)
     int network_socket = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -25,34 +138,5 @@ int main(int argc, char* argv[]){
     }else{
         printf("Sucessfully connected to remote socket!\n");
     }
-
-    //creating buffer to receive info
-    char* buffer = (char*)malloc(1024*sizeof(char));
-    if(buffer == NULL){
-        printf("Error allocating memory!\n");
-        exit(1);
-    }
-    //receiving data from remote socket
-    if(recv(network_socket, buffer, 1024*sizeof(char), 0) == -1){
-        printf("Error receiving data!\n");
-        exit(1);
-    }
-
-    //printf info received
-    printf("Server:\n%s\n", buffer);
-
-    for(int i = 0; i < 1024; i++){
-        buffer[i] = '\0';
-    }
-    strcpy(buffer, "Client: data received\n");
-    if(send(network_socket, buffer, 1024*sizeof(char), 0) == -1){
-        printf("Error sending data!\n");
-        exit(1);
-    }
-    
-    //close the socket
-    free(buffer);
-    close(network_socket);
-
-    return 0;
+    return network_socket;
 }
